@@ -8,16 +8,14 @@ from webdriver_manager.chrome import ChromeDriverManager
 from utils.config import HEADLESS, BASE_URL
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def driver():
     options = Options()
     if HEADLESS:
         options.add_argument("--headless=new")
-        # No real screen to maximize onto in headless mode, so fall back
-        # to a fixed, generous viewport instead.
-        options.add_argument("--window-size=1920,1080")
-    else:
-        options.add_argument("--start-maximized")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1440,900")
 
     # Inside Docker, CHROME_BIN and CHROMEDRIVER_PATH point at the system
     # Chromium/chromedriver installed in the image - no need to download
@@ -46,19 +44,8 @@ def driver():
 @pytest.fixture
 def open_home(driver):
     """Loads the portfolio homepage fresh, so each test starts from a clean slate.
-
-    The browser itself is session-scoped (one Chrome instance for the whole
-    run, instead of paying startup/teardown cost per test), but the
-    subscribe-popup tests depend on genuine "first visit" state - the
-    sessionStorage auto-show flag and the EmailOctopus widget's own
-    localStorage-backed frequency cap. Sharing a profile across tests would
-    otherwise leak that state between tests and make results depend on
-    execution order. So every test clears cookies + local/session storage
-    and reloads before it starts, to reproduce a true first visit each time.
+    Important for the subscribe-popup tests, which depend on 'first visit' state.
     """
-    driver.get(BASE_URL)
-    driver.delete_all_cookies()
-    driver.execute_script("window.localStorage.clear(); window.sessionStorage.clear();")
     driver.get(BASE_URL)
     return driver
 
