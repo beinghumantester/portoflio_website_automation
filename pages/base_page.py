@@ -77,5 +77,18 @@ class BasePage:
 
         return WebDriverWait(self.driver, timeout).until(condition)
 
+    def wait_for_url_contains(self, fragment, timeout=10):
+        """Poll until the current URL contains the given fragment.
+        Astro navigates via a client-side page transition, so the URL
+        updates shortly after a nav click, not synchronously with it -
+        checking current_url immediately after click() is a race condition.
+        """
+        try:
+            return WebDriverWait(self.driver, timeout).until(
+                EC.url_contains(fragment)
+            )
+        except Exception:
+            return False
+
     def title(self):
         return self.driver.title
