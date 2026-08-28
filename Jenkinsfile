@@ -95,7 +95,7 @@ pipeline {
                     for i in $(seq 1 15); do
                         HUB_RESPONSE=$(curl -s http://localhost:4444/status || true)
                         echo "Hub response: ${HUB_RESPONSE}"
-                        GRID_READY=$(echo "${HUB_RESPONSE}" | grep -o '"ready":true' || true)
+                        GRID_READY=$(echo "${HUB_RESPONSE}" | grep -oE '"ready":[[:space:]]*true' || true)
                         if [ -n "$GRID_READY" ]; then
                             echo "Selenium Grid is ready."
                             break
