@@ -105,6 +105,7 @@ pipeline {
         always {
             sh 'docker compose down -v || true'
             sh 'docker image prune -f || true'
+            junit testResults: 'reports/junit.xml', allowEmptyResults: true
             publishHTML(target: [
                 allowMissing: true,
                 alwaysLinkToLastBuild: true,
@@ -119,17 +120,55 @@ pipeline {
         success {
             script {
                 if (params.NOTIFY_EMAIL?.trim()) {
+                    def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
+                    def allureReportUrl = "${env.BUILD_URL}allure/"
+                    def testAction = currentBuild.testResultAction
+                    def totalCount = testAction ? testAction.totalCount : 0
+                    def failCount = testAction ? testAction.failCount : 0
+                    def skipCount = testAction ? testAction.skipCount : 0
+                    def passCount = totalCount - failCount - skipCount
                     mail(
                         to: params.NOTIFY_EMAIL,
-                        subject: "SUCCESS: portfolio-automation build #${env.BUILD_NUMBER}",
-                        body: """Build #${env.BUILD_NUMBER} passed.
-
-BASE_URL: ${params.BASE_URL}
-BROWSER: ${params.BROWSER}
-Image: portfolio-automation:${env.BUILD_NUMBER}
-
-Full report: ${env.BUILD_URL}
-"""
+                        subject: "portfolio-automation build #${env.BUILD_NUMBER} execution passed",
+                        mimeType: 'text/html',
+                        body: """
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <div style="background-color: #f5f5f5; padding: 16px 20px; border-radius: 6px 6px 0 0;">
+                                <h2 style="margin: 0; font-size: 20px; color: #2e7d32;">Build #${env.BUILD_NUMBER} Execution Passed</h2>
+                            </div>
+                            <div style="border: 1px solid #e0e0e0; border-top: none; padding: 20px; border-radius: 0 0 6px 6px;">
+                                <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+                                    <tr>
+                                        <td style="padding: 6px 0; color: #666; width: 140px;"><strong>Site tested</strong></td>
+                                        <td style="padding: 6px 0;">${params.BASE_URL}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 6px 0; color: #666;"><strong>Browser</strong></td>
+                                        <td style="padding: 6px 0; text-transform: capitalize;">${params.BROWSER}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 6px 0; color: #666;"><strong>Image</strong></td>
+                                        <td style="padding: 6px 0;"><code>portfolio-automation:${env.BUILD_NUMBER}</code></td>
+                                    </tr>
+                                </table>
+                                <div style="background-color: #f5f5f5; border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;">
+                                    <span style="color: #2e7d32; font-weight: bold;">${passCount} passed</span>
+                                    &nbsp;&middot;&nbsp;
+                                    <span style="color: #c62828; font-weight: bold;">${failCount} failed</span>
+                                    &nbsp;&middot;&nbsp;
+                                    <span style="color: #757575; font-weight: bold;">${skipCount} skipped</span>
+                                    &nbsp;<span style="color: #999;">(${totalCount} total)</span>
+                                </div>
+                                <div style="margin-bottom: 8px;">
+                                    <a href="${htmlReportUrl}" style="display: inline-block; background-color: #1565c0; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 4px; margin-right: 8px; font-size: 14px;">View Pytest Report</a>
+                                    <a href="${allureReportUrl}" style="display: inline-block; background-color: #6a1b9a; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 4px; font-size: 14px;">View Allure Report</a>
+                                </div>
+                                <p style="margin-top: 20px; font-size: 13px; color: #999;">
+                                    <a href="${env.BUILD_URL}" style="color: #999;">Full console output and build details</a>
+                                </p>
+                            </div>
+                        </div>
+                        """
                     )
                 }
             }
@@ -137,16 +176,49 @@ Full report: ${env.BUILD_URL}
         failure {
             script {
                 if (params.NOTIFY_EMAIL?.trim()) {
+                    def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
+                    def allureReportUrl = "${env.BUILD_URL}allure/"
+                    def testAction = currentBuild.testResultAction
+                    def totalCount = testAction ? testAction.totalCount : 0
+                    def failCount = testAction ? testAction.failCount : 0
+                    def skipCount = testAction ? testAction.skipCount : 0
+                    def passCount = totalCount - failCount - skipCount
                     mail(
                         to: params.NOTIFY_EMAIL,
-                        subject: "FAILED: portfolio-automation build #${env.BUILD_NUMBER}",
-                        body: """Build #${env.BUILD_NUMBER} failed.
-
-BASE_URL: ${params.BASE_URL}
-BROWSER: ${params.BROWSER}
-
-Check console output and the HTML/Allure reports for details: ${env.BUILD_URL}
-"""
+                        subject: "portfolio-automation build #${env.BUILD_NUMBER} execution failed",
+                        mimeType: 'text/html',
+                        body: """
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <div style="background-color: #f5f5f5; padding: 16px 20px; border-radius: 6px 6px 0 0;">
+                                <h2 style="margin: 0; font-size: 20px; color: #c62828;">Build #${env.BUILD_NUMBER} Execution Failed</h2>
+                            </div>
+                            <div style="border: 1px solid #e0e0e0; border-top: none; padding: 20px; border-radius: 0 0 6px 6px;">
+                                <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+                                    <tr>
+                                        <td style="padding: 6px 0; color: #666; width: 140px;"><strong>Site tested</strong></td>
+                                        <td style="padding: 6px 0;">${params.BASE_URL}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 6px 0; color: #666;"><strong>Browser</strong></td>
+                                        <td style="padding: 6px 0; text-transform: capitalize;">${params.BROWSER}</td>
+                                    </tr>
+                                </table>
+                                <div style="background-color: #f5f5f5; border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;">
+                                    <span style="color: #2e7d32; font-weight: bold;">${passCount} passed</span>
+                                    &nbsp;&middot;&nbsp;
+                                    <span style="color: #c62828; font-weight: bold;">${failCount} failed</span>
+                                    &nbsp;&middot;&nbsp;
+                                    <span style="color: #757575; font-weight: bold;">${skipCount} skipped</span>
+                                    &nbsp;<span style="color: #999;">(${totalCount} total)</span>
+                                </div>
+                                <div style="margin-bottom: 8px;">
+                                    <a href="${env.BUILD_URL}console" style="display: inline-block; background-color: #c62828; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 4px; margin-right: 8px; font-size: 14px;">View Console Output</a>
+                                    <a href="${htmlReportUrl}" style="display: inline-block; background-color: #1565c0; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 4px; margin-right: 8px; font-size: 14px;">Pytest Report</a>
+                                    <a href="${allureReportUrl}" style="display: inline-block; background-color: #6a1b9a; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 4px; font-size: 14px;">Allure Report</a>
+                                </div>
+                            </div>
+                        </div>
+                        """
                     )
                 }
             }
