@@ -93,7 +93,9 @@ pipeline {
                     echo "Waiting for Grid hub to report ready..."
                     GRID_READY=""
                     for i in $(seq 1 15); do
-                        GRID_READY=$(curl -s http://localhost:4444/wd/hub/status | grep -o '"ready":true' || true)
+                        HUB_RESPONSE=$(curl -s http://localhost:4444/status)
+                        echo "Hub response: ${HUB_RESPONSE}"
+                        GRID_READY=$(echo "${HUB_RESPONSE}" | grep -o '"ready":true' || true)
                         if [ -n "$GRID_READY" ]; then
                             echo "Selenium Grid is ready."
                             break
@@ -159,11 +161,21 @@ pipeline {
                 if (params.NOTIFY_EMAIL?.trim()) {
                     def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
                     def allureReportUrl = "${env.BUILD_URL}allure/"
-                    def testAction = currentBuild.testResultAction
-                    def totalCount = testAction ? testAction.totalCount : 0
-                    def failCount = testAction ? testAction.failCount : 0
-                    def skipCount = testAction ? testAction.skipCount : 0
-                    def passCount = totalCount - failCount - skipCount
+                    def totalCount = 0
+                    def failCount = 0
+                    def skipCount = 0
+                    def passCount = 0
+                    try {
+                        def testAction = currentBuild.testResultAction
+                        if (testAction) {
+                            totalCount = testAction.totalCount
+                            failCount = testAction.failCount
+                            skipCount = testAction.skipCount
+                            passCount = totalCount - failCount - skipCount
+                        }
+                    } catch (Exception e) {
+                        echo "No test results available for this build: ${e.message}"
+                    }
                     mail(
                         to: params.NOTIFY_EMAIL,
                         subject: "portfolio-automation build #${env.BUILD_NUMBER} execution passed",
@@ -215,11 +227,21 @@ pipeline {
                 if (params.NOTIFY_EMAIL?.trim()) {
                     def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
                     def allureReportUrl = "${env.BUILD_URL}allure/"
-                    def testAction = currentBuild.testResultAction
-                    def totalCount = testAction ? testAction.totalCount : 0
-                    def failCount = testAction ? testAction.failCount : 0
-                    def skipCount = testAction ? testAction.skipCount : 0
-                    def passCount = totalCount - failCount - skipCount
+                    def totalCount = 0
+                    def failCount = 0
+                    def skipCount = 0
+                    def passCount = 0
+                    try {
+                        def testAction = currentBuild.testResultAction
+                        if (testAction) {
+                            totalCount = testAction.totalCount
+                            failCount = testAction.failCount
+                            skipCount = testAction.skipCount
+                            passCount = totalCount - failCount - skipCount
+                        }
+                    } catch (Exception e) {
+                        echo "No test results available for this build: ${e.message}"
+                    }
                     mail(
                         to: params.NOTIFY_EMAIL,
                         subject: "portfolio-automation build #${env.BUILD_NUMBER} execution failed",
