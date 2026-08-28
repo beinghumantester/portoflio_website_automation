@@ -37,7 +37,7 @@ services:
       - SE_NODE_MAX_SESSIONS=2
 
   tests:
-    image: portfolio-automation
+    image: ${IMAGE_NAME:-portfolio-automation}:${IMAGE_TAG:-latest}
     depends_on:
       - selenium-hub
       - chrome-node
@@ -45,7 +45,7 @@ services:
     # Runs as the host user (set by Jenkins/shell before `docker compose up`)
     # so files written into ./reports come out with correct ownership -
     # same fix as the earlier Allure permission issue, applied here too.
-    user: "${UID}:${GID}"
+    user: "${HOST_UID}:${HOST_GID}"
     environment:
       - SELENIUM_REMOTE_URL=http://selenium-hub:4444/wd/hub
       - BASE_URL=${BASE_URL}

@@ -28,10 +28,16 @@ pipeline {
             choices: ['chrome', 'firefox'],
             description: 'Which Grid node to run against'
         )
+        string(
+            name: 'NOTIFY_EMAIL',
+            defaultValue: '',
+            description: 'Email address for build result notifications. Leave blank to skip.'
+        )
     }
 
     environment {
         IMAGE_NAME = 'portfolio-automation'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -45,8 +51,13 @@ pipeline {
             parallel {
                 stage('Deployment Job') {
                     steps {
-                        echo 'Deployment job: building the (now lean, browser-free) test image.'
-                        sh 'docker build --no-cache -t ${IMAGE_NAME} .'
+                        echo "Deployment job: building test image, tagged :${IMAGE_TAG} and :latest."
+                        sh '''
+                            docker build --no-cache \
+                                -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                                -t ${IMAGE_NAME}:latest \
+                                .
+                        '''
                     }
                 }
                 stage('Execution Job') {
@@ -65,10 +76,12 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p reports
-                    export UID=$(id -u)
-                    export GID=$(id -g)
+                    export HOST_UID=$(id -u)
+                    export HOST_GID=$(id -g)
                     export BASE_URL="${BASE_URL}"
                     export BROWSER="${BROWSER}"
+                    export IMAGE_NAME="${IMAGE_NAME}"
+                    export IMAGE_TAG="${IMAGE_TAG}"
                     DOCKER_RUN_ARGS=$(cat docker_run_args.txt)
                     echo "Running with args: '${DOCKER_RUN_ARGS}'"
 
@@ -85,6 +98,7 @@ pipeline {
     post {
         always {
             sh 'docker compose down -v || true'
+            sh 'docker image prune -f || true'
             publishHTML(target: [
                 allowMissing: true,
                 alwaysLinkToLastBuild: true,
@@ -95,6 +109,41 @@ pipeline {
             ])
             allure includeProperties: false, jdk: '', results: [[path: 'reports/allure-results']]
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+        }
+        success {
+            script {
+                if (params.NOTIFY_EMAIL?.trim()) {
+                    mail(
+                        to: params.NOTIFY_EMAIL,
+                        subject: "SUCCESS: portfolio-automation build #${env.BUILD_NUMBER}",
+                        body: """Build #${env.BUILD_NUMBER} passed.
+
+BASE_URL: ${params.BASE_URL}
+BROWSER: ${params.BROWSER}
+Image: portfolio-automation:${env.BUILD_NUMBER}
+
+Full report: ${env.BUILD_URL}
+"""
+                    )
+                }
+            }
+        }
+        failure {
+            script {
+                if (params.NOTIFY_EMAIL?.trim()) {
+                    mail(
+                        to: params.NOTIFY_EMAIL,
+                        subject: "FAILED: portfolio-automation build #${env.BUILD_NUMBER}",
+                        body: """Build #${env.BUILD_NUMBER} failed.
+
+BASE_URL: ${params.BASE_URL}
+BROWSER: ${params.BROWSER}
+
+Check console output and the HTML/Allure reports for details: ${env.BUILD_URL}
+"""
+                    )
+                }
+            }
         }
     }
 }
