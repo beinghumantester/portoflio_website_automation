@@ -93,7 +93,7 @@ pipeline {
                     echo "Waiting for Grid hub to report ready..."
                     GRID_READY=""
                     for i in $(seq 1 15); do
-                        HUB_RESPONSE=$(curl -s http://localhost:4444/status)
+                        HUB_RESPONSE=$(curl -s http://localhost:4444/status || true)
                         echo "Hub response: ${HUB_RESPONSE}"
                         GRID_READY=$(echo "${HUB_RESPONSE}" | grep -o '"ready":true' || true)
                         if [ -n "$GRID_READY" ]; then
