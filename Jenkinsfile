@@ -75,7 +75,13 @@ pipeline {
         stage('Run Tests') {
             steps {
                 sh '''
+                    # Clear out any leftover root-owned files from earlier
+                    # runs (before the HOST_UID/HOST_GID fix was in place).
+                    # Jenkins' own user can't delete root-owned files, but a
+                    # disposable root container can, via the same bind mount.
                     mkdir -p reports
+                    docker run --rm -v "${WORKSPACE}/reports:/reports" alpine sh -c "rm -rf /reports/* /reports/.[!.]* 2>/dev/null || true"
+
                     export HOST_UID=$(id -u)
                     export HOST_GID=$(id -g)
                     export BASE_URL="${BASE_URL}"
