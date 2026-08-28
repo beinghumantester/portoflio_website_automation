@@ -1,13 +1,14 @@
 // Jenkins Pipeline for the portfolio website automation suite.
-// Stages map to the confirmed architecture: Docker build -> Docker run
-// (Pytest + Selenium) -> reports published as a Jenkins artifact.
+// Stages now mirror the confirmed architecture more closely:
+//   Jenkins master splits into two parallel jobs -
+//     Deployment Job  -> builds the Docker image
+//     Execution Job   -> calls the "execution API" to construct the
+//                         actual test command from parameters
+//   Both converge at Run Tests, which uses what Execution Job produced.
 //
 // Prerequisites on the Jenkins server itself:
 //   - Docker installed, and the Jenkins user able to run `docker` commands
-//     (on Linux: `sudo usermod -aG docker jenkins`, then restart Jenkins -
-//     same permission issue you hit locally with your own user applies to
-//     the jenkins service account too)
-//   - "HTML Publisher" plugin installed, so the Publish Report stage works
+//   - "HTML Publisher" plugin installed
 //   - This Jenkinsfile checked into the repo Jenkins is pointed at
 
 pipeline {
@@ -18,6 +19,11 @@ pipeline {
             name: 'BASE_URL',
             defaultValue: 'https://beinghumantester.com',
             description: 'URL of the portfolio site to test against'
+        )
+        string(
+            name: 'TEST_MARKER',
+            defaultValue: '',
+            description: 'Optional pytest marker to run a subset (navigation, links, modal). Leave blank for the full suite.'
         )
     }
 
@@ -32,26 +38,39 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
-            steps {
-                sh 'docker build --no-cache -t ${IMAGE_NAME} .'
+        stage('Prepare') {
+            parallel {
+                stage('Deployment Job') {
+                    steps {
+                        echo 'Deployment job: building Docker image with the checked-out code.'
+                        sh 'docker build --no-cache -t ${IMAGE_NAME} .'
+                    }
+                }
+                stage('Execution Job') {
+                    steps {
+                        echo 'Execution job: calling the execution API to construct the test command.'
+                        sh '''
+                            TEST_MARKER="${TEST_MARKER}" COMMAND_OUTPUT_FILE=docker_run_args.txt \
+                                python3 execution_api/build_command.py
+                        '''
+                    }
+                }
             }
         }
 
         stage('Run Tests') {
             steps {
-                // Reports land in a workspace-local folder via the volume
-                // mount, so Jenkins can pick them up as artifacts after
-                // the container exits - same principle as the confirmed
-                // pipeline's "volume mount -> persistent location" step,
-                // just landing in the Jenkins workspace instead of a
-                // separate Azure location for now.
+                // Both parallel branches have finished here: the image
+                // exists (Deployment Job) and docker_run_args.txt holds
+                // whatever the Execution Job's API decided to run.
                 sh '''
                     mkdir -p reports
+                    DOCKER_RUN_ARGS=$(cat docker_run_args.txt)
+                    echo "Running with args: '${DOCKER_RUN_ARGS}'"
                     docker run --rm \
                         -e BASE_URL="${BASE_URL}" \
                         -v "${WORKSPACE}/reports:/app/reports" \
-                        ${IMAGE_NAME}
+                        ${IMAGE_NAME} ${DOCKER_RUN_ARGS}
                 '''
             }
         }
@@ -59,8 +78,6 @@ pipeline {
 
     post {
         always {
-            // Publishes reports/report.html as a viewable report on the
-            // Jenkins build page itself - requires the HTML Publisher plugin.
             publishHTML(target: [
                 allowMissing: true,
                 alwaysLinkToLastBuild: true,
