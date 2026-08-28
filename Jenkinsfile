@@ -72,6 +72,44 @@ pipeline {
             }
         }
 
+        stage('Health Check') {
+            steps {
+                sh '''
+                    echo "Checking portfolio site is reachable..."
+                    SITE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${BASE_URL}" || echo "000")
+                    if [ "$SITE_STATUS" -lt 200 ] || [ "$SITE_STATUS" -ge 400 ]; then
+                        echo "Site health check FAILED - got HTTP ${SITE_STATUS} from ${BASE_URL}"
+                        exit 1
+                    fi
+                    echo "Site is reachable (HTTP ${SITE_STATUS})"
+
+                    echo "Starting Selenium Grid..."
+                    export HOST_UID=$(id -u)
+                    export HOST_GID=$(id -g)
+                    export IMAGE_NAME="${IMAGE_NAME}"
+                    export IMAGE_TAG="${IMAGE_TAG}"
+                    docker compose up -d selenium-hub chrome-node firefox-node
+
+                    echo "Waiting for Grid hub to report ready..."
+                    GRID_READY=""
+                    for i in $(seq 1 15); do
+                        GRID_READY=$(curl -s http://localhost:4444/wd/hub/status | grep -o '"ready":true' || true)
+                        if [ -n "$GRID_READY" ]; then
+                            echo "Selenium Grid is ready."
+                            break
+                        fi
+                        echo "Grid not ready yet, waiting... (${i}/15)"
+                        sleep 2
+                    done
+                    if [ -z "$GRID_READY" ]; then
+                        echo "Selenium Grid did not become ready in time - aborting."
+                        docker compose down -v
+                        exit 1
+                    fi
+                '''
+            }
+        }
+
         stage('Run Tests') {
             steps {
                 sh '''
@@ -91,7 +129,6 @@ pipeline {
                     DOCKER_RUN_ARGS=$(cat docker_run_args.txt)
                     echo "Running with args: '${DOCKER_RUN_ARGS}'"
 
-                    docker compose up -d selenium-hub chrome-node firefox-node
                     docker compose run --rm tests ${DOCKER_RUN_ARGS}
                     TEST_EXIT_CODE=$?
                     docker compose down -v
