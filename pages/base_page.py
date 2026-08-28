@@ -1,5 +1,16 @@
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import ElementClickInterceptedException
+
+# The EmailOctopus popup widget has its own ungated ~10s auto-show timer,
+# independent of the site's custom sessionStorage-gated one (see
+# tests/test_subscribe_popup.py for the documented xfail on this). That
+# timer can fire mid-test and cover unrelated elements (like nav links),
+# causing intercepted clicks that have nothing to do with what's actually
+# being tested. This locator lets click() defensively clear it out of the
+# way rather than letting it fail unrelated tests.
+_BLOCKING_POPUP_CLOSE_BUTTON = (By.CSS_SELECTOR, "button.close[aria-label='Close']")
 
 
 class BasePage:
@@ -9,8 +20,21 @@ class BasePage:
 
     def click(self, locator):
         el = self.wait.until(EC.element_to_be_clickable(locator))
-        el.click()
+        try:
+            el.click()
+        except ElementClickInterceptedException:
+            self._dismiss_blocking_popup_if_present()
+            el = self.wait.until(EC.element_to_be_clickable(locator))
+            el.click()
         return el
+
+    def _dismiss_blocking_popup_if_present(self):
+        try:
+            close_btn = self.driver.find_element(*_BLOCKING_POPUP_CLOSE_BUTTON)
+            if close_btn.is_displayed():
+                close_btn.click()
+        except Exception:
+            pass
 
     def find(self, locator):
         return self.wait.until(EC.presence_of_element_located(locator))
@@ -20,13 +44,6 @@ class BasePage:
             WebDriverWait(self.driver, timeout).until(
                 EC.visibility_of_element_located(locator)
             )
-            return True
-        except Exception:
-            return False
-
-    def wait_for_url_contains(self, fragment, timeout=10):
-        try:
-            WebDriverWait(self.driver, timeout).until(EC.url_contains(fragment))
             return True
         except Exception:
             return False

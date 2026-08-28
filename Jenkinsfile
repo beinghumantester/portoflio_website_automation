@@ -68,6 +68,8 @@ pipeline {
                     DOCKER_RUN_ARGS=$(cat docker_run_args.txt)
                     echo "Running with args: '${DOCKER_RUN_ARGS}'"
                     docker run --rm \
+                        --user "$(id -u):$(id -g)" \
+                        -e HOME=/tmp \
                         -e BASE_URL="${BASE_URL}" \
                         -v "${WORKSPACE}/reports:/app/reports" \
                         ${IMAGE_NAME} ${DOCKER_RUN_ARGS}
