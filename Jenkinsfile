@@ -1,15 +1,13 @@
 // Jenkins Pipeline for the portfolio website automation suite.
-// Stages now mirror the confirmed architecture more closely:
-//   Jenkins master splits into two parallel jobs -
-//     Deployment Job  -> builds the Docker image
-//     Execution Job   -> calls the "execution API" to construct the
-//                         actual test command from parameters
-//   Both converge at Run Tests, which uses what Execution Job produced.
+// Now runs against a Selenium Grid (hub + Chrome/Firefox nodes) instead
+// of a browser bundled inside the test image - Deployment Job builds the
+// lean test image, Execution Job constructs the test command, and
+// Run Tests brings up the whole Grid + test-runner stack via Docker Compose.
 //
 // Prerequisites on the Jenkins server itself:
-//   - Docker installed, and the Jenkins user able to run `docker` commands
-//   - "HTML Publisher" plugin installed
-//   - This Jenkinsfile checked into the repo Jenkins is pointed at
+//   - Docker + Docker Compose installed, Jenkins user able to run both
+//   - "HTML Publisher" plugin and "Allure Jenkins Plugin" installed
+//   - An "Allure Commandline" tool configured under Manage Jenkins -> Tools
 
 pipeline {
     agent any
@@ -24,6 +22,11 @@ pipeline {
             name: 'TEST_MARKER',
             defaultValue: '',
             description: 'Optional pytest marker to run a subset (navigation, links, modal). Leave blank for the full suite.'
+        )
+        choice(
+            name: 'BROWSER',
+            choices: ['chrome', 'firefox'],
+            description: 'Which Grid node to run against'
         )
     }
 
@@ -42,7 +45,7 @@ pipeline {
             parallel {
                 stage('Deployment Job') {
                     steps {
-                        echo 'Deployment job: building Docker image with the checked-out code.'
+                        echo 'Deployment job: building the (now lean, browser-free) test image.'
                         sh 'docker build --no-cache -t ${IMAGE_NAME} .'
                     }
                 }
@@ -60,19 +63,20 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                // Both parallel branches have finished here: the image
-                // exists (Deployment Job) and docker_run_args.txt holds
-                // whatever the Execution Job's API decided to run.
                 sh '''
                     mkdir -p reports
+                    export UID=$(id -u)
+                    export GID=$(id -g)
+                    export BASE_URL="${BASE_URL}"
+                    export BROWSER="${BROWSER}"
                     DOCKER_RUN_ARGS=$(cat docker_run_args.txt)
                     echo "Running with args: '${DOCKER_RUN_ARGS}'"
-                    docker run --rm \
-                        --user "$(id -u):$(id -g)" \
-                        -e HOME=/tmp \
-                        -e BASE_URL="${BASE_URL}" \
-                        -v "${WORKSPACE}/reports:/app/reports" \
-                        ${IMAGE_NAME} ${DOCKER_RUN_ARGS}
+
+                    docker compose up -d selenium-hub chrome-node firefox-node
+                    docker compose run --rm tests ${DOCKER_RUN_ARGS}
+                    TEST_EXIT_CODE=$?
+                    docker compose down -v
+                    exit $TEST_EXIT_CODE
                 '''
             }
         }
@@ -80,6 +84,7 @@ pipeline {
 
     post {
         always {
+            sh 'docker compose down -v || true'
             publishHTML(target: [
                 allowMissing: true,
                 alwaysLinkToLastBuild: true,
@@ -88,9 +93,6 @@ pipeline {
                 reportFiles: 'report.html',
                 reportName: 'Pytest HTML Report'
             ])
-            // Requires the "Allure Jenkins Plugin" installed, and an Allure
-            // commandline tool configured under Manage Jenkins -> Tools
-            // (Jenkins can auto-install it there - no manual download needed).
             allure includeProperties: false, jdk: '', results: [[path: 'reports/allure-results']]
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
         }

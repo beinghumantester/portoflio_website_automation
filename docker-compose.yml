@@ -1,0 +1,54 @@
+# Selenium Grid + test runner stack.
+#
+# selenium-hub routes test sessions to whichever browser node is available.
+# chrome-node / firefox-node each run one real browser, registered with the hub.
+# tests connects to the hub remotely instead of launching a browser locally -
+# this is what lets the test image stay lightweight (no Chromium install needed).
+
+services:
+  selenium-hub:
+    image: selenium/hub:4.27.0
+    container_name: selenium-hub
+    ports:
+      - "4442:4442"
+      - "4443:4443"
+      - "4444:4444"
+
+  chrome-node:
+    image: selenium/node-chrome:4.27.0
+    shm_size: 2gb
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=2
+
+  firefox-node:
+    image: selenium/node-firefox:4.27.0
+    shm_size: 2gb
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=2
+
+  tests:
+    image: portfolio-automation
+    depends_on:
+      - selenium-hub
+      - chrome-node
+      - firefox-node
+    # Runs as the host user (set by Jenkins/shell before `docker compose up`)
+    # so files written into ./reports come out with correct ownership -
+    # same fix as the earlier Allure permission issue, applied here too.
+    user: "${UID}:${GID}"
+    environment:
+      - SELENIUM_REMOTE_URL=http://selenium-hub:4444/wd/hub
+      - BASE_URL=${BASE_URL}
+      - BROWSER=${BROWSER:-chrome}
+    volumes:
+      - ./reports:/app/reports
