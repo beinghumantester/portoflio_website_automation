@@ -30,7 +30,7 @@ pipeline {
         )
         string(
             name: 'NOTIFY_EMAIL',
-            defaultValue: '',
+            defaultValue: 'thebeinghumantester@gmail.com',
             description: 'Email address for build result notifications. Leave blank to skip.'
         )
     }
