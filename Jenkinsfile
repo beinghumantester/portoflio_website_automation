@@ -86,6 +86,10 @@ pipeline {
                 reportFiles: 'report.html',
                 reportName: 'Pytest HTML Report'
             ])
+            // Requires the "Allure Jenkins Plugin" installed, and an Allure
+            // commandline tool configured under Manage Jenkins -> Tools
+            // (Jenkins can auto-install it there - no manual download needed).
+            allure includeProperties: false, jdk: '', results: [[path: 'reports/allure-results']]
             archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
         }
     }
