@@ -98,11 +98,33 @@ pipeline {
                     passwordVariable: 'GHCR_TOKEN'
                 )]) {
                     sh '''
-                        echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
                         docker tag ${IMAGE_NAME}:${IMAGE_TAG} ghcr.io/${GHCR_USER}/${IMAGE_NAME}:${IMAGE_TAG}
                         docker tag ${IMAGE_NAME}:latest ghcr.io/${GHCR_USER}/${IMAGE_NAME}:latest
-                        docker push ghcr.io/${GHCR_USER}/${IMAGE_NAME}:${IMAGE_TAG}
-                        docker push ghcr.io/${GHCR_USER}/${IMAGE_NAME}:latest
+
+                        # Re-login fresh before each push and retry on
+                        # failure - confirmed from a real run that the
+                        # first push can succeed while a second push,
+                        # seconds later in the same session, fails with
+                        # "unauthorized". Re-authenticating per push and
+                        # retrying rules out a stale/expired session token
+                        # as the cause, without needing to be 100% certain
+                        # that's the exact mechanism.
+                        push_with_retry() {
+                            image="$1"
+                            for attempt in 1 2 3; do
+                                echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+                                if docker push "$image"; then
+                                    return 0
+                                fi
+                                echo "Push failed (attempt ${attempt}/3) for ${image}, retrying in 5s..."
+                                sleep 5
+                            done
+                            echo "Push failed after 3 attempts: ${image}"
+                            return 1
+                        }
+
+                        push_with_retry ghcr.io/${GHCR_USER}/${IMAGE_NAME}:${IMAGE_TAG}
+                        push_with_retry ghcr.io/${GHCR_USER}/${IMAGE_NAME}:latest
                         docker logout ghcr.io
                     '''
                 }
