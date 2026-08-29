@@ -43,8 +43,8 @@ pipeline {
         )
         string(
             name: 'NOTIFY_EMAIL',
-            defaultValue: 'thebeinghumantester@gmail.com',
-            description: 'Email address for build result notifications. Leave blank to skip.'
+            defaultValue: '',
+            description: 'Email address for build result notifications. Leave blank to skip. Set per-job in Jenkins, not hardcoded here, since this file is public.'
         )
     }
 
@@ -287,7 +287,8 @@ pipeline {
                         color: 'good',
                         message: "✅ PR #${env.CHANGE_ID} passed: *${env.CHANGE_TITLE ?: 'no title'}*\n${env.BUILD_URL}"
                     )
-                } else if (params.NOTIFY_EMAIL?.trim()) {
+                } else if ((params.NOTIFY_EMAIL?.trim() ?: env.DEFAULT_NOTIFY_EMAIL)) {
+                    def notifyEmail = params.NOTIFY_EMAIL?.trim() ?: env.DEFAULT_NOTIFY_EMAIL
                     def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
                     def allureReportUrl = "${env.BUILD_URL}allure/"
                     def totalCount = (env.TEST_TOTAL ?: '0') as Integer
@@ -295,7 +296,7 @@ pipeline {
                     def skipCount = (env.TEST_SKIP ?: '0') as Integer
                     def passCount = (env.TEST_PASS ?: '0') as Integer
                     mail(
-                        to: params.NOTIFY_EMAIL,
+                        to: notifyEmail,
                         subject: "portfolio-automation build #${env.BUILD_NUMBER} execution passed",
                         mimeType: 'text/html',
                         body: """
@@ -348,7 +349,8 @@ pipeline {
                         color: 'danger',
                         message: "❌ PR #${env.CHANGE_ID} failed: *${env.CHANGE_TITLE ?: 'no title'}*\n${env.BUILD_URL}console"
                     )
-                } else if (params.NOTIFY_EMAIL?.trim()) {
+                } else if ((params.NOTIFY_EMAIL?.trim() ?: env.DEFAULT_NOTIFY_EMAIL)) {
+                    def notifyEmail = params.NOTIFY_EMAIL?.trim() ?: env.DEFAULT_NOTIFY_EMAIL
                     def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
                     def allureReportUrl = "${env.BUILD_URL}allure/"
                     def totalCount = (env.TEST_TOTAL ?: '0') as Integer
@@ -356,7 +358,7 @@ pipeline {
                     def skipCount = (env.TEST_SKIP ?: '0') as Integer
                     def passCount = (env.TEST_PASS ?: '0') as Integer
                     mail(
-                        to: params.NOTIFY_EMAIL,
+                        to: notifyEmail,
                         subject: "portfolio-automation build #${env.BUILD_NUMBER} execution failed",
                         mimeType: 'text/html',
                         body: """
