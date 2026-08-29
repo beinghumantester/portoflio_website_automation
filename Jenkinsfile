@@ -38,6 +38,19 @@ pipeline {
     environment {
         IMAGE_NAME = 'portfolio-automation'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
+        // Explicitly derived from params (with a safe fallback), rather
+        // than relying on Jenkins auto-injecting parameters into the shell
+        // environment. Confirmed via console output: on a Multibranch
+        // job's very first build for a newly-discovered branch, the
+        // parameter genuinely isn't available yet (Jenkins is still in
+        // the middle of discovering it from this same Jenkinsfile) -
+        // ${BASE_URL} in shell steps came through completely empty,
+        // breaking curl. This affects every new branch/PR going forward,
+        // not just this one - environment{} block entries are evaluated
+        // as plain Groovy at pipeline load time and don't have this
+        // timing problem.
+        BASE_URL = "${params.BASE_URL ?: 'https://beinghumantester.com'}"
+        BROWSER = "${params.BROWSER ?: 'chrome'}"
     }
 
     stages {
@@ -93,6 +106,38 @@ pipeline {
                         docker logout ghcr.io
                     '''
                 }
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                // Trivy: free, open-source vulnerability scanner (Aqua
+                // Security). Scans OS packages and Python dependencies in
+                // the image we just built for known CVEs.
+                //
+                // --severity CRITICAL,HIGH filters out noise from LOW/
+                // MEDIUM findings, which are common and rarely urgent.
+                //
+                // --exit-code 0 means: report findings, but never fail
+                // the build - deliberately lenient for this first rollout,
+                // since we don't have a baseline yet of how many findings
+                // a typical scan turns up. Once you've seen a real report,
+                // tighten this to --exit-code 1 to actually block builds
+                // on CRITICAL findings.
+                //
+                // The docker.sock mount lets Trivy inspect the image
+                // directly from the local Docker daemon - no need to
+                // export/re-pull it. The cache volume avoids re-downloading
+                // Trivy's vulnerability database on every single build.
+                sh '''
+                    docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v trivy-cache:/root/.cache/ \
+                        aquasec/trivy:latest image \
+                        --severity CRITICAL,HIGH \
+                        --exit-code 0 \
+                        ${IMAGE_NAME}:${IMAGE_TAG}
+                '''
             }
         }
 
