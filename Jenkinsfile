@@ -72,6 +72,30 @@ pipeline {
             }
         }
 
+        stage('Push Image') {
+            steps {
+                // Pushes to GitHub Container Registry (ghcr.io) - free,
+                // no card required, and reuses the same GitHub account
+                // this repo already lives on. Requires a Jenkins
+                // credential named 'ghcr-credentials' (Username with
+                // password: GitHub username + a PAT with write:packages).
+                withCredentials([usernamePassword(
+                    credentialsId: 'ghcr-credentials',
+                    usernameVariable: 'GHCR_USER',
+                    passwordVariable: 'GHCR_TOKEN'
+                )]) {
+                    sh '''
+                        echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+                        docker tag ${IMAGE_NAME}:${IMAGE_TAG} ghcr.io/${GHCR_USER}/${IMAGE_NAME}:${IMAGE_TAG}
+                        docker tag ${IMAGE_NAME}:latest ghcr.io/${GHCR_USER}/${IMAGE_NAME}:latest
+                        docker push ghcr.io/${GHCR_USER}/${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ghcr.io/${GHCR_USER}/${IMAGE_NAME}:latest
+                        docker logout ghcr.io
+                    '''
+                }
+            }
+        }
+
         stage('Health Check') {
             steps {
                 sh '''
