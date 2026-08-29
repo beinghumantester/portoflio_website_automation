@@ -6,6 +6,10 @@
 
 FROM python:3.11-slim
 
+# Links this image to its source repo on GHCR automatically on every push,
+# so "Connect Repository" doesn't need to be clicked manually each time.
+LABEL org.opencontainers.image.source=https://github.com/beinghumantester/portoflio_website_automation
+
 ENV HEADLESS=true
 ENV PYTHONUNBUFFERED=1
 
