@@ -276,7 +276,18 @@ pipeline {
         }
         success {
             script {
-                if (params.NOTIFY_EMAIL?.trim()) {
+                if (env.CHANGE_ID) {
+                    // This is a PR build (Multibranch discovered a pull
+                    // request - env.CHANGE_ID is only set in that case).
+                    // Fast, dev-facing feedback goes to Slack instead of
+                    // email - email is reserved for the main branch's
+                    // health, which stakeholders/QA managers care about.
+                    slackSend(
+                        channel: '#ci-alerts',
+                        color: 'good',
+                        message: "✅ PR #${env.CHANGE_ID} passed: *${env.CHANGE_TITLE ?: 'no title'}*\n${env.BUILD_URL}"
+                    )
+                } else if (params.NOTIFY_EMAIL?.trim()) {
                     def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
                     def allureReportUrl = "${env.BUILD_URL}allure/"
                     def totalCount = (env.TEST_TOTAL ?: '0') as Integer
@@ -331,7 +342,13 @@ pipeline {
         }
         failure {
             script {
-                if (params.NOTIFY_EMAIL?.trim()) {
+                if (env.CHANGE_ID) {
+                    slackSend(
+                        channel: '#ci-alerts',
+                        color: 'danger',
+                        message: "❌ PR #${env.CHANGE_ID} failed: *${env.CHANGE_TITLE ?: 'no title'}*\n${env.BUILD_URL}console"
+                    )
+                } else if (params.NOTIFY_EMAIL?.trim()) {
                     def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
                     def allureReportUrl = "${env.BUILD_URL}allure/"
                     def totalCount = (env.TEST_TOTAL ?: '0') as Integer
