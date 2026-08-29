@@ -144,7 +144,21 @@ pipeline {
         always {
             sh 'docker compose down -v || true'
             sh 'docker image prune -f || true'
-            junit testResults: 'reports/junit.xml', allowEmptyResults: true
+            script {
+                // currentBuild.testResultAction is blocked by this Jenkins
+                // instance's script-security sandbox entirely (confirmed:
+                // it throws MissingPropertyException even on builds with
+                // real, successful test results, not just empty ones).
+                // The junit step's own return value doesn't have this
+                // problem - it's a plain object handed back from an
+                // already-approved step, not a dig into internal Run
+                // fields, so reading its properties needs no approval.
+                def results = junit(testResults: 'reports/junit.xml', allowEmptyResults: true)
+                env.TEST_TOTAL = "${results.totalCount}"
+                env.TEST_FAIL = "${results.failCount}"
+                env.TEST_SKIP = "${results.skipCount}"
+                env.TEST_PASS = "${results.totalCount - results.failCount - results.skipCount}"
+            }
             publishHTML(target: [
                 allowMissing: true,
                 alwaysLinkToLastBuild: true,
@@ -161,21 +175,10 @@ pipeline {
                 if (params.NOTIFY_EMAIL?.trim()) {
                     def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
                     def allureReportUrl = "${env.BUILD_URL}allure/"
-                    def totalCount = 0
-                    def failCount = 0
-                    def skipCount = 0
-                    def passCount = 0
-                    try {
-                        def testAction = currentBuild.testResultAction
-                        if (testAction) {
-                            totalCount = testAction.totalCount
-                            failCount = testAction.failCount
-                            skipCount = testAction.skipCount
-                            passCount = totalCount - failCount - skipCount
-                        }
-                    } catch (Exception e) {
-                        echo "No test results available for this build: ${e.message}"
-                    }
+                    def totalCount = (env.TEST_TOTAL ?: '0') as Integer
+                    def failCount = (env.TEST_FAIL ?: '0') as Integer
+                    def skipCount = (env.TEST_SKIP ?: '0') as Integer
+                    def passCount = (env.TEST_PASS ?: '0') as Integer
                     mail(
                         to: params.NOTIFY_EMAIL,
                         subject: "portfolio-automation build #${env.BUILD_NUMBER} execution passed",
@@ -227,21 +230,10 @@ pipeline {
                 if (params.NOTIFY_EMAIL?.trim()) {
                     def htmlReportUrl = "${env.BUILD_URL}Pytest_20HTML_20Report/"
                     def allureReportUrl = "${env.BUILD_URL}allure/"
-                    def totalCount = 0
-                    def failCount = 0
-                    def skipCount = 0
-                    def passCount = 0
-                    try {
-                        def testAction = currentBuild.testResultAction
-                        if (testAction) {
-                            totalCount = testAction.totalCount
-                            failCount = testAction.failCount
-                            skipCount = testAction.skipCount
-                            passCount = totalCount - failCount - skipCount
-                        }
-                    } catch (Exception e) {
-                        echo "No test results available for this build: ${e.message}"
-                    }
+                    def totalCount = (env.TEST_TOTAL ?: '0') as Integer
+                    def failCount = (env.TEST_FAIL ?: '0') as Integer
+                    def skipCount = (env.TEST_SKIP ?: '0') as Integer
+                    def passCount = (env.TEST_PASS ?: '0') as Integer
                     mail(
                         to: params.NOTIFY_EMAIL,
                         subject: "portfolio-automation build #${env.BUILD_NUMBER} execution failed",
