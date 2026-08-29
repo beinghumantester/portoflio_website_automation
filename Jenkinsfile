@@ -12,6 +12,19 @@
 pipeline {
     agent any
 
+    options {
+        // This Jenkinsfile is shared by two separate jobs (the regular
+        // 'portfolio-automation' Pipeline and the 'portfolio-automation-pr'
+        // Multibranch Pipeline). Both start a Selenium Grid bound to the
+        // same fixed host ports (4442-4444) - if they ever ran at the same
+        // time, they'd collide (confirmed: this already happened once as
+        // a container-name conflict, and would recur as a port-binding
+        // conflict even after that specific fix). This lock ensures only
+        // one build, from either job, holds the Grid at a time - the
+        // other waits in queue instead of failing.
+        lock(resource: 'selenium-grid-ports')
+    }
+
     parameters {
         string(
             name: 'BASE_URL',
