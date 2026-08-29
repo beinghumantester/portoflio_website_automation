@@ -1,7 +1,7 @@
 # Portfolio Website Automation (Selenium + Pytest)
 
 POM-based Selenium automation for the portfolio website, built as the first
-step toward the CI/CD pipeline (Jenkins on Azure VM → Docker → Pytest+Selenium
+step toward the CI/CD pipeline (Jenkins → Docker → Pytest+Selenium
 → reports) confirmed with the team.
 
 ## Structure
@@ -110,5 +110,3 @@ This is what gets containerized in the pipeline. A `Dockerfile` needs to:
 4. Run `pytest` as the container's entrypoint, with `BASE_URL` and other
    params passed in as environment variables - this is what the Execution
    API in the confirmed pipeline would set dynamically per run
-
-Say the word when you're ready for that.
