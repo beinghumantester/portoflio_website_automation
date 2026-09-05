@@ -98,34 +98,6 @@ pipeline {
             }
         }
 
-        stage('Preview Build') {
-            when {
-                expression { return env.CHANGE_ID != null }
-            }
-            steps {
-                sh '''
-                    npm ci
-                    npm run build
-                '''
-                sh '''
-                    docker compose up -d --build preview
-                    echo "Waiting for preview server..."
-                    for i in $(seq 1 15); do
-                        if curl -s -o /dev/null "http://localhost:4321"; then
-                            echo "Preview server is up."
-                            break
-                        fi
-                        sleep 1
-                    done
-                '''
-                script {
-                    env.BASE_URL = "http://preview:4321"
-                }
-            }
-        }
-
-
-
         stage('Push Image') {
             steps {
                 // Pushes to GitHub Container Registry (ghcr.io) - free,
@@ -204,67 +176,45 @@ pipeline {
             }
         }
 
-  // Patch to your EXISTING 'Health Check' stage. Only the first block
-// changes (the external site-reachability curl) - the Grid startup and
-// readiness loop below it are untouched, they still run unconditionally
-// for both PR and master builds.
-//
-// Stage order requirement this depends on: 'Preview Build' must run
-// BEFORE this stage (place it right after 'Prepare', before 'Push
-// Image') - otherwise env.BASE_URL isn't overridden yet when this runs,
-// and PR builds would fall through to checking production instead,
-// silently reintroducing the original blind spot.
+        stage('Health Check') {
+            steps {
+                sh '''
+                    echo "Checking portfolio site is reachable..."
+                    SITE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${BASE_URL}" || echo "000")
+                    if [ "$SITE_STATUS" -lt 200 ] || [ "$SITE_STATUS" -ge 400 ]; then
+                        echo "Site health check FAILED - got HTTP ${SITE_STATUS} from ${BASE_URL}"
+                        exit 1
+                    fi
+                    echo "Site is reachable (HTTP ${SITE_STATUS})"
 
-stage('Health Check') {
-    steps {
-        sh '''
-            if [ -z "${CHANGE_ID}" ]; then
-                # Master build only. PR builds already confirmed their
-                # preview server is up in the Preview Build stage's own
-                # host-side check (against the published port) - and
-                # BASE_URL is a Compose-internal hostname here for PR
-                # builds, unreachable from this bare host, so re-checking
-                # it the same way master does would fail for an unrelated
-                # reason (DNS resolution), not a real site problem.
-                echo "Checking portfolio site is reachable..."
-                SITE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${BASE_URL}" || echo "000")
-                if [ "$SITE_STATUS" -lt 200 ] || [ "$SITE_STATUS" -ge 400 ]; then
-                    echo "Site health check FAILED - got HTTP ${SITE_STATUS} from ${BASE_URL}"
-                    exit 1
-                fi
-                echo "Site is reachable (HTTP ${SITE_STATUS})"
-            else
-                echo "PR build - skipping external site check (preview server reachability already confirmed in Preview Build stage)."
-            fi
+                    echo "Starting Selenium Grid..."
+                    export HOST_UID=$(id -u)
+                    export HOST_GID=$(id -g)
+                    export IMAGE_NAME="${IMAGE_NAME}"
+                    export IMAGE_TAG="${IMAGE_TAG}"
+                    docker compose up -d selenium-hub chrome-node firefox-node
 
-            echo "Starting Selenium Grid..."
-            export HOST_UID=$(id -u)
-            export HOST_GID=$(id -g)
-            export IMAGE_NAME="${IMAGE_NAME}"
-            export IMAGE_TAG="${IMAGE_TAG}"
-            docker compose up -d selenium-hub chrome-node firefox-node
-
-            echo "Waiting for Grid hub to report ready..."
-            GRID_READY=""
-            for i in $(seq 1 15); do
-                HUB_RESPONSE=$(curl -s http://localhost:4444/status || true)
-                echo "Hub response: ${HUB_RESPONSE}"
-                GRID_READY=$(echo "${HUB_RESPONSE}" | grep -oE '"ready":[[:space:]]*true' || true)
-                if [ -n "$GRID_READY" ]; then
-                    echo "Selenium Grid is ready."
-                    break
-                fi
-                echo "Grid not ready yet, waiting... (${i}/15)"
-                sleep 2
-            done
-            if [ -z "$GRID_READY" ]; then
-                echo "Selenium Grid did not become ready in time - aborting."
-                docker compose down -v
-                exit 1
-            fi
-        '''
-    }
-} 
+                    echo "Waiting for Grid hub to report ready..."
+                    GRID_READY=""
+                    for i in $(seq 1 15); do
+                        HUB_RESPONSE=$(curl -s http://localhost:4444/status || true)
+                        echo "Hub response: ${HUB_RESPONSE}"
+                        GRID_READY=$(echo "${HUB_RESPONSE}" | grep -oE '"ready":[[:space:]]*true' || true)
+                        if [ -n "$GRID_READY" ]; then
+                            echo "Selenium Grid is ready."
+                            break
+                        fi
+                        echo "Grid not ready yet, waiting... (${i}/15)"
+                        sleep 2
+                    done
+                    if [ -z "$GRID_READY" ]; then
+                        echo "Selenium Grid did not become ready in time - aborting."
+                        docker compose down -v
+                        exit 1
+                    fi
+                '''
+            }
+        }
 
         stage('Run Tests') {
             steps {
