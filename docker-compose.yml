@@ -51,3 +51,12 @@ services:
       - BROWSER=${BROWSER:-chrome}
     volumes:
       - ./reports:/app/reports
+
+    preview:
+      image: node:22-slim
+      working_dir: /app
+      volumes:
+        - ./dist:/app/dist:ro
+      command: npx --yes serve dist -l 4321
+      ports:
+      - "4321:4321"
