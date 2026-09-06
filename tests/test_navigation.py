@@ -18,7 +18,7 @@ def test_landing_page_loads(open_home):
         ("NAV_PLAYGROUND", "/projects"),
         ("NAV_AI_IN_TESTING", "/ai-in-testing"),
         ("NAV_CV", "/cv"),
-        ("NAV_TWIL", "/twil"),
+        ("NAV_TWIL", "/til"),
     ],
 )
 def test_nav_tab_opens_correct_page(open_home, tab_locator_name, expected_href_fragment):

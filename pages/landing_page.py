@@ -4,14 +4,17 @@ from pages.base_page import BasePage
 
 class LandingPage(BasePage):
     # --- Top nav tabs (real hrefs, from /) ---
+    # Publications, Blogs, AI In Testing, and TIL live inside the "Writing"
+    # and "Learning" <details>/<summary> dropdown menus, so they render as
+    # a.nav-dropdown-link rather than the top-level a.nav-link.
     NAV_ABOUT_ME = (By.CSS_SELECTOR, "a.nav-link[href='/']")
-    NAV_PUBLICATIONS = (By.CSS_SELECTOR, "a.nav-link[href='/publications']")
-    NAV_BLOGS = (By.CSS_SELECTOR, "a.nav-link[href='/posts']")
+    NAV_PUBLICATIONS = (By.CSS_SELECTOR, "a.nav-dropdown-link[href='/publications']")
+    NAV_BLOGS = (By.CSS_SELECTOR, "a.nav-dropdown-link[href='/posts']")
     NAV_SPEAKING = (By.CSS_SELECTOR, "a.nav-link[href='/talks']")
     NAV_PLAYGROUND = (By.CSS_SELECTOR, "a.nav-link[href='/projects']")
-    NAV_AI_IN_TESTING = (By.CSS_SELECTOR, "a.nav-link[href='/ai-in-testing']")
+    NAV_AI_IN_TESTING = (By.CSS_SELECTOR, "a.nav-dropdown-link[href='/ai-in-testing']")
     NAV_CV = (By.CSS_SELECTOR, "a.nav-link[href='/cv']")
-    NAV_TWIL = (By.CSS_SELECTOR, "a.nav-link[href='/twil']")
+    NAV_TWIL = (By.CSS_SELECTOR, "a.nav-dropdown-link[href='/til']")
 
     # --- Left sidebar ---
     PROFILE_PICTURE = (By.CSS_SELECTOR, "img.sidebar-avatar")
