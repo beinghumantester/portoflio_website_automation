@@ -100,6 +100,15 @@ def test_accessibility(driver, path):
     # Every violation recorded, not just the blocking ones - an AI acting
     # on this later needs the full picture (a "minor" advisory today is
     # still a real, fixable finding), not just what failed the build.
+    #
+    # Per-node detail added below (not just a count) after this exact gap
+    # cost real time in practice: a color-contrast fix was chased down by
+    # hand, math done manually against themes.ts, because nothing here
+    # recorded which element failed or its actual computed colors. axe
+    # already computes fgColor/bgColor/contrastRatio internally for every
+    # color-contrast check (surfaced via each node's `any` checks) - this
+    # was always available, just previously discarded before it reached
+    # this JSON.
     SCAN_RESULTS["accessibility"][path] = [
         {
             "id": v.get("id"),
@@ -108,6 +117,34 @@ def test_accessibility(driver, path):
             "help": v.get("help"),
             "helpUrl": v.get("helpUrl"),
             "nodes_affected": len(v.get("nodes", [])),
+            "nodes": [
+                {
+                    # CSS selector path to the actual failing element -
+                    # e.g. [".tag"] - tells you which class to search
+                    # for in global.css without guessing.
+                    "target": node.get("target"),
+                    # Truncated so one page with many affected nodes
+                    # doesn't blow up the JSON file's size.
+                    "html": (node.get("html") or "")[:300],
+                    # axe's own plain-English diagnosis, e.g. "Element
+                    # has insufficient color contrast of 3.52 (foreground
+                    # color: #3b82f6, background color: #f9fafb...)" -
+                    # often already names the fix target directly.
+                    "failureSummary": node.get("failureSummary"),
+                    # The actual computed values axe used to fail this
+                    # node - for color-contrast this is fgColor, bgColor,
+                    # contrastRatio, expectedContrastRatio: the exact
+                    # numbers this session derived by hand from
+                    # themes.ts, now available directly, per-node,
+                    # without needing the theme source at all.
+                    "computed_data": next(
+                        (check.get("data") for check in node.get("any", [])
+                         if check.get("data")),
+                        None,
+                    ),
+                }
+                for node in v.get("nodes", [])
+            ],
         }
         for v in violations
     ]
