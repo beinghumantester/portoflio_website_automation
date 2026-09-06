@@ -5,3 +5,5 @@ webdriver-manager==4.0.2
 allure-pytest==2.13.5
 pytest-rerunfailures==15.0
 python-dotenv==1.0.1
+selenium-axe-python==2.2.0
+ 
