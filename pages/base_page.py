@@ -1,7 +1,7 @@
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import ElementClickInterceptedException
+from selenium.common.exceptions import ElementClickInterceptedException, TimeoutException, NoSuchElementException
 
 # The EmailOctopus popup widget has its own ungated ~10s auto-show timer,
 # independent of the site's custom sessionStorage-gated one (see
@@ -19,12 +19,23 @@ class BasePage:
         self.wait = WebDriverWait(driver, 10)
 
     def click(self, locator):
-        el = self.wait.until(EC.element_to_be_clickable(locator))
+        try:
+            el = self.wait.until(EC.element_to_be_clickable(locator))
+        except TimeoutException:
+            self._open_dropdown_for(locator)
+            el = self.wait.until(EC.element_to_be_clickable(locator))
+        return self._click_dismissing_popup(
+            el, lambda: self.wait.until(EC.element_to_be_clickable(locator))
+        )
+
+    def _click_dismissing_popup(self, el, refetch):
+        """Click el, retrying once (via refetch) if the EmailOctopus popup
+        happened to pop up over it and intercept the click."""
         try:
             el.click()
         except ElementClickInterceptedException:
             self._dismiss_blocking_popup_if_present()
-            el = self.wait.until(EC.element_to_be_clickable(locator))
+            el = refetch()
             el.click()
         return el
 
@@ -35,6 +46,28 @@ class BasePage:
                 close_btn.click()
         except Exception:
             pass
+
+    def _open_dropdown_for(self, locator):
+        """Some nav links (Publications, Blogs, AI In Testing, TIL) live inside
+        <details class="nav-dropdown"> menus and are only visible/clickable
+        once their <summary> trigger has been clicked. If the plain
+        element_to_be_clickable wait timed out, check whether the target sits
+        inside a closed dropdown and open it before retrying.
+        """
+        try:
+            target = self.driver.find_element(*locator)
+            details = target.find_element(By.XPATH, "ancestor::details[1]")
+        except NoSuchElementException:
+            return
+        if details.get_attribute("open") is None:
+            summary_locator = (By.CSS_SELECTOR, "summary")
+            summary = details.find_element(*summary_locator)
+            self._click_dismissing_popup(
+                summary, lambda: details.find_element(*summary_locator)
+            )
+            WebDriverWait(self.driver, 5).until(
+                lambda d: details.get_attribute("open") is not None
+            )
 
     def find(self, locator):
         return self.wait.until(EC.presence_of_element_located(locator))
